@@ -9,7 +9,8 @@ use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Mockery;
 use NotificationChannels\AwsSns\Sns;
 use NotificationChannels\AwsSns\SnsChannel;
-use NotificationChannels\AwsSns\SnsMessage;
+use NotificationChannels\AwsSns\SnsSMSMessage;
+use NotificationChannels\AwsSns\SnsPushMessage;
 
 class SnsChannelTest extends TestCase
 {
@@ -55,7 +56,7 @@ class SnsChannelTest extends TestCase
     public function test_it_will_send_a_sms_message_to_the_result_of_the_route_method_of_the_notifiable()
     {
         $notifiable = new NotifiableWithMethod;
-        $message = new SnsMessage('Message text');
+        $message = new SnsSMSMessage('Message text');
 
         $notification = Mockery::mock(Notification::class);
         $notification->shouldReceive('toSns')->andReturn($message);
@@ -70,7 +71,7 @@ class SnsChannelTest extends TestCase
     public function test_it_will_make_a_call_to_the_phone_number_attribute_of_the_notifiable()
     {
         $notifiable = new NotifiableWithAttribute;
-        $message = new SnsMessage('Some content to send');
+        $message = new SnsSMSMessage('Some content to send');
 
         $notification = Mockery::mock(Notification::class);
         $notification->shouldReceive('toSns')->andReturn($message);
@@ -91,7 +92,7 @@ class SnsChannelTest extends TestCase
 
         $this->sns->shouldReceive('send')
             ->atLeast()->once()
-            ->with(Mockery::type(SnsMessage::class), Mockery::any());
+            ->with(Mockery::type(SnsSMSMessage::class), Mockery::any());
 
         $this->channel->send($notifiable, $notification);
     }
@@ -120,7 +121,56 @@ class SnsChannelTest extends TestCase
 
         $this->sns->shouldReceive('send')
             ->atLeast()->once()
-            ->with(Mockery::type(SnsMessage::class), $phoneNumber);
+            ->with(Mockery::type(SnsSMSMessage::class), $phoneNumber);
+
+        $this->channel->send($anonymousNotifiable, $notification);
+    }
+
+    public function test_it_will_send_a_push_message_to_the_result_of_the_route_method_of_the_notifiable()
+    {
+        $notifiable = new NotifiableWithPushMethod;
+        $message = new SnsPushMessage(['body' => 'Push message text', 'title' => 'Test Title']);
+
+        $notification = Mockery::mock(Notification::class);
+        $notification->shouldReceive('toSns')->andReturn($message);
+
+        $endpointArn = 'arn:aws:sns:us-east-1:123456789012:endpoint/APNS/MyApp/12345678-1234-1234-1234-123456789012';
+
+        $this->sns->shouldReceive('send')
+            ->atLeast()->once()
+            ->with($message, $endpointArn);
+
+        $this->channel->send($notifiable, $notification);
+    }
+
+    public function test_it_will_make_a_call_to_the_endpoint_arn_attribute_of_the_notifiable()
+    {
+        $notifiable = new NotifiableWithPushAttribute;
+        $message = new SnsPushMessage(['body' => 'Some push content to send', 'title' => 'Test Title']);
+
+        $notification = Mockery::mock(Notification::class);
+        $notification->shouldReceive('toSns')->andReturn($message);
+
+        $endpointArn = 'arn:aws:sns:us-east-1:123456789012:endpoint/APNS/MyApp/87654321-4321-4321-4321-210987654321';
+
+        $this->sns->shouldReceive('send')
+            ->atLeast()->once()
+            ->with($message, $endpointArn);
+
+        $this->channel->send($notifiable, $notification);
+    }
+
+    public function test_it_will_send_a_push_to_an_anonymous_notifiable()
+    {
+        $notification = Mockery::mock(Notification::class);
+        $notification->shouldReceive('toSns')->andReturn(new SnsPushMessage(['body' => 'Push message text', 'title' => 'Test Title']));
+
+        $endpointArn = 'arn:aws:sns:us-east-1:123456789012:endpoint/APNS/MyApp/87654321-4321-4321-4321-210987654321';
+        $anonymousNotifiable = NotificationFacade::route('sns', $endpointArn);
+
+        $this->sns->shouldReceive('send')
+            ->atLeast()->once()
+            ->with(Mockery::type(SnsPushMessage::class), $endpointArn);
 
         $this->channel->send($anonymousNotifiable, $notification);
     }
@@ -147,6 +197,24 @@ class NotifiableWithMethod
 class NotifiableWithAttribute
 {
     public $phone_number = '+22222222222';
+
+    public function routeNotificationFor()
+    {
+        //
+    }
+}
+
+class NotifiableWithPushMethod
+{
+    public function routeNotificationFor()
+    {
+        return 'arn:aws:sns:us-east-1:123456789012:endpoint/APNS/MyApp/12345678-1234-1234-1234-123456789012';
+    }
+}
+
+class NotifiableWithPushAttribute
+{
+    public $sns_endpoint_arn = 'arn:aws:sns:us-east-1:123456789012:endpoint/APNS/MyApp/87654321-4321-4321-4321-210987654321';
 
     public function routeNotificationFor()
     {

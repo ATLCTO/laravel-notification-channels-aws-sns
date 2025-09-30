@@ -2,7 +2,7 @@
 
 namespace NotificationChannels\AwsSns;
 
-class SnsMessage
+class SnsSMSMessage
 {
     const PROMOTIONAL_SMS_TYPE = 'Promotional';
 
@@ -54,7 +54,7 @@ class SnsMessage
     /**
      * Creates a new instance of the message.
      *
-     * @return SnsMessage
+     * @return SnsSMSMessage
      */
     public static function create(array $data = [])
     {
@@ -160,4 +160,26 @@ class SnsMessage
     {
         return $this->originationNumber;
     }
+
+    /**
+     * Check if this is an SMS message.
+     *
+     * @return bool
+     */
+    public function isSms()
+    {
+        return true;
+    }
+
+    /**
+     * Check if this is a push message.
+     *
+     * @return bool
+     */
+    public function isPush()
+    {
+        return false;
+    }
 }
+
+
