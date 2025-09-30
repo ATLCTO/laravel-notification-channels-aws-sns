@@ -225,6 +225,32 @@ class SnsTest extends TestCase
         $this->sns->send($message, $destinations);
     }
 
+    public function test_it_handles_endpoint_disabled_error_on_push_send()
+    {
+        $endpointArn = 'arn:aws:sns:us-east-1:123456789012:endpoint/APNS/MyApp/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+        $message = new SnsPushMessage(['body' => 'Push Message']);
+
+        $exception = new \Aws\Exception\AwsException(
+            'Endpoint is disabled',
+            new \Aws\Command('Publish'),
+            [
+                'code' => 'EndpointDisabled',
+                'request_id' => 'req-123',
+                'type' => 'client',
+            ]
+        );
+
+        $this->snsService->shouldReceive('publish')
+            ->once()
+            ->andThrow($exception);
+
+        $result = $this->sns->sendPush($message, $endpointArn);
+
+        $this->assertIsArray($result);
+        $this->assertEquals('EndpointDisabled', $result['error']);
+        $this->assertEquals($endpointArn, $result['endpoint']);
+    }
+
     public function test_it_can_create_platform_endpoint()
     {
         $token = 'device-token-123';

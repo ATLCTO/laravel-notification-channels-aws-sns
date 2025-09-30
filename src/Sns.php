@@ -26,6 +26,30 @@ class Sns
      */
     public function send($message, string|array $destination): Result|array
     {
+        // If the message is the unified SnsMessage, route based on destination type(s)
+        if ($message instanceof SnsMessage) {
+            if (is_array($destination)) {
+                $results = [];
+                foreach ($destination as $singleDestination) {
+                    $results[] = $this->send($message, $singleDestination);
+                }
+                return $results;
+            }
+
+            // Decide by destination hint: E.164 phone vs ARN
+            if (str_starts_with($destination, 'arn:aws:sns:')) {
+                if (! $message->getPush()) {
+                    throw new \InvalidArgumentException('Push message required to send to endpoint ARN');
+                }
+                return $this->sendPush($message->getPush(), $destination);
+            }
+
+            if (! $message->getSms()) {
+                throw new \InvalidArgumentException('SMS message required to send to phone number');
+            }
+            return $this->sendSms($message->getSms(), $destination);
+        }
+
         if (is_array($destination)) {
             $results = [];
             foreach ($destination as $singleDestination) {
@@ -90,7 +114,10 @@ class Sns
      *
      * @throws Aws\Exception\AwsException
      */
-    public function sendPush(SnsPushMessage $message, string $endpointArn): Result
+    /**
+     * @return Result|array
+     */
+    public function sendPush(SnsPushMessage $message, string $endpointArn): Result|array
     {
         $parameters = [
             'Message' => $message->buildPayload(),
@@ -99,7 +126,22 @@ class Sns
             'TargetArn' => $endpointArn,
         ];
 
-        return $this->sns->publish($parameters);
+        try {
+            return $this->sns->publish($parameters);
+        } catch (\Aws\Exception\AwsException $e) {
+            $errorCode = $e->getAwsErrorCode();
+
+            if ($errorCode === 'EndpointDisabled') {
+                return [
+                    'error' => $errorCode,
+                    'message' => $e->getAwsErrorMessage(),
+                    'request_id' => method_exists($e, 'getAwsRequestId') ? $e->getAwsRequestId() : null,
+                    'endpoint' => $endpointArn,
+                ];
+            }
+
+            throw $e;
+        }
     }
 
     /**

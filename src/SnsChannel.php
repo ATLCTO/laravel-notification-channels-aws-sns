@@ -25,7 +25,18 @@ class SnsChannel
             $destination = $this->getDestination($notifiable, $notification);
             $message = $this->getMessage($notifiable, $notification);
 
-            $result = $this->sns->send($message, $destination);
+            // If unified message, route child per destination type for single destination
+            if ($message instanceof SnsMessage && is_string($destination)) {
+                if (str_starts_with($destination, 'arn:aws:sns:')) {
+                    $child = $message->getPush();
+                } else {
+                    $child = $message->getSms();
+                }
+
+                $result = $this->sns->send($child, $destination);
+            } else {
+                $result = $this->sns->send($message, $destination);
+            }
 
             if (is_array($result)) {
                 // Return the last result if multiple destinations were provided
@@ -69,14 +80,47 @@ class SnsChannel
     protected function guessDestination($notifiable, Notification $notification)
     {
         $message = $this->getMessage($notifiable, $notification);
-        
-        if ($message->isSms()) {
-            return $this->guessPhoneDestination($notifiable);
-        } elseif ($message->isPush()) {
-            return $this->guessPushDestination($notifiable);
+
+        // Collect possible destinations
+        $destinations = [];
+
+        // Phone destination only if message supports SMS
+        $phone = $this->tryGuess($fn = fn() => $this->guessPhoneDestination($notifiable));
+        if ($phone !== null) {
+            if (($message instanceof SnsSMSMessage) || ($message instanceof SnsMessage && $message->getSms())) {
+                $destinations[] = $phone;
+            }
+        }
+
+        // Endpoint destination only if message supports Push
+        $endpoint = $this->tryGuess($fn = fn() => $this->guessPushDestination($notifiable));
+        if ($endpoint !== null) {
+            if (($message instanceof SnsPushMessage) || ($message instanceof SnsMessage && $message->getPush())) {
+                $destinations[] = $endpoint;
+            }
+        }
+
+        if (count($destinations) === 1) {
+            return $destinations[0];
+        }
+
+        if (count($destinations) > 1) {
+            return $destinations;
         }
 
         throw CouldNotSendNotification::invalidReceiver();
+    }
+
+    /**
+     * Helper to attempt a guess without throwing.
+     */
+    private function tryGuess(callable $callback)
+    {
+        try {
+            return $callback();
+        } catch (CouldNotSendNotification $e) {
+            return null;
+        }
     }
 
     /**
@@ -122,10 +166,18 @@ class SnsChannel
     {
         $message = $notification->toSns($notifiable);
         if (is_string($message)) {
-            return new SnsSMSMessage($message);
+            // Convert plain string to unified message with SMS child
+            return SnsMessage::create()->sms(SnsSMSMessage::create(['body' => $message]));
         }
 
-        if ($message instanceof SnsSMSMessage || $message instanceof SnsPushMessage) {
+        if ($message instanceof SnsMessage || $message instanceof SnsSMSMessage || $message instanceof SnsPushMessage) {
+            // For backward compatibility, wrap single child into unified message
+            if ($message instanceof SnsSMSMessage) {
+                return SnsMessage::create()->sms($message);
+            }
+            if ($message instanceof SnsPushMessage) {
+                return SnsMessage::create()->push($message);
+            }
             return $message;
         }
 

@@ -2,31 +2,31 @@
 
 namespace NotificationChannels\AwsSns\Test;
 
-use NotificationChannels\AwsSns\SnsMessage;
+use NotificationChannels\AwsSns\SnsSMSMessage;
 
 class SnsMessageTest extends TestCase
 {
     public function test_it_can_accept_a_plain_string_when_constructing_a_message()
     {
-        $message = new SnsMessage('Do not touch my booty');
+        $message = new SnsSMSMessage('Do not touch my booty');
         $this->assertEquals('Do not touch my booty', $message->getBody());
     }
 
     public function test_it_can_accept_some_initial_content_when_constructing_a_message()
     {
-        $message = new SnsMessage(['body' => 'My message body']);
+        $message = new SnsSMSMessage(['body' => 'My message body']);
         $this->assertEquals('My message body', $message->getBody());
     }
 
     public function test_it_provides_a_create_method()
     {
-        $message = SnsMessage::create(['body' => 'My body from create']);
+        $message = SnsSMSMessage::create(['body' => 'My body from create']);
         $this->assertEquals('My body from create', $message->getBody());
     }
 
     public function test_the_body_content_can_be_set_using_a_proper_method()
     {
-        $message = SnsMessage::create();
+        $message = SnsSMSMessage::create();
         $this->assertEmpty($message->getBody());
         $message->body('The brand new body');
         $this->assertEquals('The brand new body', $message->getBody());
@@ -34,37 +34,37 @@ class SnsMessageTest extends TestCase
 
     public function test_the_default_sms_delivery_type_is_promotional()
     {
-        $message = SnsMessage::create();
+        $message = SnsSMSMessage::create();
         $this->assertEquals('Promotional', $message->getDeliveryType());
     }
 
     public function test_the_sms_delivery_type_can_be_changed_using_a_proper_method()
     {
-        $message = SnsMessage::create()->transactional();
+        $message = SnsSMSMessage::create()->transactional();
         $this->assertEquals('Transactional', $message->getDeliveryType());
     }
 
     public function test_the_sms_delivery_type_can_be_explicitly_as_promotional()
     {
-        $message = SnsMessage::create()->promotional();
+        $message = SnsSMSMessage::create()->promotional();
         $this->assertEquals('Promotional', $message->getDeliveryType());
     }
 
     public function test_the_default_sms_sender_id_is_empty()
     {
-        $message = SnsMessage::create();
+        $message = SnsSMSMessage::create();
         $this->assertEmpty($message->getSender());
     }
 
     public function test_the_sms_sender_id_can_be_changed_using_a_proper_method()
     {
-        $message = SnsMessage::create()->sender('Test');
+        $message = SnsSMSMessage::create()->sender('Test');
         $this->assertEquals('Test', $message->getSender());
     }
 
     public function test_it_can_accept_all_the_contents_when_constructing_a_message()
     {
-        $message = SnsMessage::create([
+        $message = SnsSMSMessage::create([
             'body' => 'My mass body',
             'transactional' => true,
             'sender' => 'Test',
@@ -77,7 +77,7 @@ class SnsMessageTest extends TestCase
     public function test_it_can_send_sms_message_with_origination_number()
     {
         $originationNumber = '+13347814073';
-        $message = SnsMessage::create([
+        $message = SnsSMSMessage::create([
             'body' => 'Message text',
             'sender' => 'Test',
             'originationNumber' => $originationNumber,
